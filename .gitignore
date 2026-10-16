@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production build output
+dist/
+dist-ssr/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor & OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# Legacy hospital files & archive artifacts
+*.zip
+deploy/
+google-apps-script/
+google-apps-script-index.html
+aga-khan-hospital.jpg
+make_gas.py
+src/pages/AddPatient*
+src/pages/Dashboard.css
+src/pages/Dashboard.jsx
+src/pages/PatientRecords*
+src/context/HospitalContext.jsx
+src/data/sampleData.js
+src/components/Sidebar.*
