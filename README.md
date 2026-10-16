@@ -5,6 +5,9 @@
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-5.0-646CFF?logo=vite&logoColor=white)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen.svg?logo=googlechrome&logoColor=white)](https://gaytridevisaroop2023-hue.github.io/smart-cgpa-advisor/)
+
+🔗 **Live Website**: [https://gaytridevisaroop2023-hue.github.io/smart-cgpa-advisor/](https://gaytridevisaroop2023-hue.github.io/smart-cgpa-advisor/)
 
 ---
 
