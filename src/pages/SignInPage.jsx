@@ -32,8 +32,6 @@ export default function SignInPage() {
     theme,
     toggleTheme,
     login,
-    loginWithDemo,
-    loginAsGuest,
     register,
     showToast,
   } = useAcademic();
@@ -199,23 +197,43 @@ export default function SignInPage() {
               </button>
             </div>
 
+            {/* Privacy Guarantee Alert */}
+            <div className="auth-privacy-banner" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+              background: 'var(--color-emerald-subtle)',
+              border: '1px solid var(--color-emerald-border)',
+              color: 'var(--color-emerald)',
+              padding: '0.65rem 0.85rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.75rem',
+              marginBottom: '1.25rem',
+              lineHeight: '1.45',
+            }}>
+              <ShieldCheck size={18} style={{ flexShrink: 0 }} />
+              <span>
+                <strong>Private Course Vault:</strong> Each student account has an isolated database. Your courses, grades, and simulations cannot be seen by others.
+              </span>
+            </div>
+
             {/* SIGN IN VIEW */}
             {activeMode === 'signin' && (
               <div>
                 <div className="auth-panel-heading">
                   <h2 className="auth-panel-title">Student Sign In</h2>
                   <p className="auth-panel-subtitle">
-                    Enter your university credentials or select a quick demo student profile below to enter the portal.
+                    Sign in with your university credentials to unlock your private course records and academic advisor.
                   </p>
                 </div>
 
-                {/* 1-Click Quick Demo Profiles */}
+                {/* Quick Demo Credentials Bar */}
                 <div className="auth-quick-demo-section">
                   <div className="quick-demo-header">
                     <span className="quick-demo-title">
-                      <Sparkles size={14} /> 1-Click Quick Demo Access
+                      <Sparkles size={14} /> Quick Demo Accounts
                     </span>
-                    <span className="quick-demo-badge">Click to log in immediately</span>
+                    <span className="quick-demo-badge">Click to auto-fill credentials</span>
                   </div>
 
                   <div className="quick-demo-cards-row">
@@ -237,8 +255,13 @@ export default function SignInPage() {
                           key={u.id}
                           type="button"
                           className="quick-demo-pill"
-                          onClick={() => loginWithDemo(u.profileType)}
-                          title={`Instant Sign-In as ${u.name} (${u.program})`}
+                          onClick={() => {
+                            setIdentifier(u.email);
+                            setPassword(u.password || 'password123');
+                            setSignInError('');
+                            showToast(`Loaded ${u.name}'s credentials. Click "Sign In" to enter.`, 'info');
+                          }}
+                          title={`Auto-fill credentials for ${u.name} (${u.program})`}
                         >
                           <div className="demo-pill-top">
                             <div className="demo-pill-avatar">{u.initials}</div>
@@ -316,7 +339,7 @@ export default function SignInPage() {
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
                       />
-                      <span>Remember this session</span>
+                      <span>Remember my session</span>
                     </label>
 
                     <button
@@ -339,24 +362,14 @@ export default function SignInPage() {
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <span>Signing In...</span>
+                      <span>Unlocking Courses...</span>
                     ) : (
                       <>
                         <LogIn size={17} />
-                        <span>Sign In to Academic Portal</span>
+                        <span>Sign In & Open Private Courses</span>
                         <ArrowRight size={16} />
                       </>
                     )}
-                  </button>
-
-                  {/* Guest Access Alternative */}
-                  <button
-                    type="button"
-                    className="auth-guest-btn"
-                    onClick={loginAsGuest}
-                  >
-                    <Sparkles size={15} className="text-accent" />
-                    <span>Explore as Guest Explorer (Instant Trial)</span>
                   </button>
                 </form>
               </div>
@@ -623,8 +636,8 @@ export default function SignInPage() {
               </div>
 
               <div className="showcase-security-note">
-                <ShieldCheck size={14} className="text-emerald" />
-                <span>Client-Side Local Storage Privacy • No cloud tracking • Data belongs to you</span>
+                <ShieldCheck size={16} className="text-emerald" />
+                <span>Isolated Student Vault • Password Protected • Courses are strictly private to each user</span>
               </div>
             </div>
           </div>

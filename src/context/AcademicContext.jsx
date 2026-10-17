@@ -9,6 +9,19 @@ import {
   determineRiskAlert,
 } from '../utils/gpaCalculations';
 
+export const getUserCoursesKey = (userId) => `smart_cgpa_user_courses_${userId}`;
+export const getUserProfileKey = (userId) => `smart_cgpa_user_profile_${userId}`;
+
+export const BLANK_STUDENT = {
+  name: '',
+  id: '',
+  program: '',
+  faculty: '',
+  currentSemesterNumber: 1,
+  targetCGPA: 3.50,
+  degreeTotalCredits: 130,
+};
+
 const AcademicContext = createContext();
 
 export function AcademicProvider({ children }) {
@@ -28,13 +41,17 @@ export function AcademicProvider({ children }) {
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
+    const isAuth = localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
+    const savedUser = localStorage.getItem('smart_cgpa_current_user');
+    return Boolean(isAuth && savedUser);
   });
 
   const [currentUser, setCurrentUser] = useState(() => {
     try {
+      const isAuth = localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
       const saved = localStorage.getItem('smart_cgpa_current_user');
-      return saved ? JSON.parse(saved) : null;
+      if (isAuth && saved) return JSON.parse(saved);
+      return null;
     } catch {
       return null;
     }
@@ -43,21 +60,55 @@ export function AcademicProvider({ children }) {
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Student Profile
+  // Student Profile - strictly isolated to current authenticated user
   const [student, setStudent] = useState(() => {
-    const saved = localStorage.getItem('smart_cgpa_student');
-    return saved ? JSON.parse(saved) : SAMPLE_STUDENT;
+    const isAuth = localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
+    const savedUserStr = localStorage.getItem('smart_cgpa_current_user');
+    if (isAuth && savedUserStr) {
+      try {
+        const user = JSON.parse(savedUserStr);
+        const savedProfile = localStorage.getItem(getUserProfileKey(user.id));
+        if (savedProfile) return JSON.parse(savedProfile);
+        return {
+          name: user.name,
+          id: user.studentId,
+          program: user.program,
+          faculty: user.faculty || 'Faculty of Computing & IT',
+          currentSemesterNumber: user.currentSemesterNumber || 1,
+          targetCGPA: user.targetCGPA || 3.50,
+          degreeTotalCredits: user.degreeTotalCredits || 130,
+        };
+      } catch {
+        return BLANK_STUDENT;
+      }
+    }
+    return BLANK_STUDENT;
   });
 
-  // Semesters Data
+  // Semesters Data - strictly isolated to current authenticated user
   const [semesters, setSemesters] = useState(() => {
-    const saved = localStorage.getItem('smart_cgpa_semesters');
-    return saved ? JSON.parse(saved) : INITIAL_SEMESTERS;
+    const isAuth = localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
+    const savedUserStr = localStorage.getItem('smart_cgpa_current_user');
+    if (isAuth && savedUserStr) {
+      try {
+        const user = JSON.parse(savedUserStr);
+        const savedCourses = localStorage.getItem(getUserCoursesKey(user.id));
+        if (savedCourses) return JSON.parse(savedCourses);
+        if (user.profileType) {
+          const demo = DEMO_PROFILES.find(p => p.id === user.profileType);
+          if (demo) return demo.semesters;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   // Currently Selected Semester for details/editor
   const [activeSemesterId, setActiveSemesterId] = useState(() => {
-    return INITIAL_SEMESTERS[INITIAL_SEMESTERS.length - 1]?.id || 'sem-4';
+    return semesters[semesters.length - 1]?.id || 'sem-1';
   });
 
   // What-If Simulation modified grades map: { [subjectId]: gradeLetter }
@@ -73,30 +124,38 @@ export function AcademicProvider({ children }) {
   const [isEditCgpaModalOpen, setIsEditCgpaModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null); // { semesterId, subject } or null
 
-  // Save changes to localStorage
+  // Save users database
   useEffect(() => {
     localStorage.setItem('smart_cgpa_users_db', JSON.stringify(users));
   }, [users]);
 
+  // Save current user's profile to their private isolated key
   useEffect(() => {
-    localStorage.setItem('smart_cgpa_is_authenticated', isAuthenticated ? 'true' : 'false');
-  }, [isAuthenticated]);
+    if (isAuthenticated && currentUser && currentUser.id && student && student.name) {
+      localStorage.setItem(getUserProfileKey(currentUser.id), JSON.stringify(student));
+    }
+  }, [student, isAuthenticated, currentUser]);
 
+  // Save current user's courses to their private isolated key
   useEffect(() => {
-    if (currentUser) {
+    if (isAuthenticated && currentUser && currentUser.id && Array.isArray(semesters)) {
+      localStorage.setItem(getUserCoursesKey(currentUser.id), JSON.stringify(semesters));
+    }
+  }, [semesters, isAuthenticated, currentUser]);
+
+  // Update session markers
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      localStorage.setItem('smart_cgpa_is_authenticated', 'true');
       localStorage.setItem('smart_cgpa_current_user', JSON.stringify(currentUser));
     } else {
+      localStorage.removeItem('smart_cgpa_is_authenticated');
       localStorage.removeItem('smart_cgpa_current_user');
+      // Clean up any legacy shared data keys so they never leak
+      localStorage.removeItem('smart_cgpa_student');
+      localStorage.removeItem('smart_cgpa_semesters');
     }
-  }, [currentUser]);
-
-  useEffect(() => {
-    localStorage.setItem('smart_cgpa_student', JSON.stringify(student));
-  }, [student]);
-
-  useEffect(() => {
-    localStorage.setItem('smart_cgpa_semesters', JSON.stringify(semesters));
-  }, [semesters]);
+  }, [isAuthenticated, currentUser]);
 
   useEffect(() => {
     localStorage.setItem('smart_cgpa_theme', theme);
@@ -290,23 +349,32 @@ export function AcademicProvider({ children }) {
     showToast("Simulated grades permanently applied to academic records!", "success");
   };
 
-  // Demo Profile Switcher
-  const loadDemoProfile = (profileId) => {
-    const profile = DEMO_PROFILES.find(p => p.id === profileId);
-    if (!profile) return;
-    setStudent(profile.student);
-    setSemesters(profile.semesters);
-    setActiveSemesterId(profile.semesters[profile.semesters.length - 1]?.id || 'sem-1');
+  // Reset current student courses to their starter template
+  const resetCurrentUserCourses = () => {
+    if (!currentUser) return;
+    if (currentUser.profileType) {
+      const demo = DEMO_PROFILES.find(p => p.id === currentUser.profileType);
+      if (demo) {
+        setSemesters(demo.semesters);
+        setActiveSemesterId(demo.semesters[demo.semesters.length - 1]?.id || 'sem-1');
+        setSimulatedGrades({});
+        showToast('Courses reset to default template', 'info');
+        return;
+      }
+    }
+    const cleanSem = [
+      {
+        id: `sem-${Date.now()}`,
+        name: 'Semester 1',
+        term: 'Current Term',
+        isCompleted: false,
+        subjects: [],
+      },
+    ];
+    setSemesters(cleanSem);
+    setActiveSemesterId(cleanSem[0].id);
     setSimulatedGrades({});
-    showToast(`Loaded Profile: ${profile.label}`, "success");
-  };
-
-  const resetToDefaultData = () => {
-    setStudent(SAMPLE_STUDENT);
-    setSemesters(INITIAL_SEMESTERS);
-    setActiveSemesterId(INITIAL_SEMESTERS[INITIAL_SEMESTERS.length - 1]?.id || 'sem-4');
-    setSimulatedGrades({});
-    showToast("Academic data reset to standard default", "info");
+    showToast('Your courses have been cleared', 'info');
   };
 
   const setPriorConsolidatedCGPA = (priorCGPA, priorCredits) => {
@@ -335,92 +403,98 @@ export function AcademicProvider({ children }) {
     showToast(`Prior CGPA set to ${gpa.toFixed(2)} (${credits} Credits)`, 'success');
   };
 
-  // ── Authentication Handlers ─────────────────────────────────────
+  // ── Authentication Handlers (Isolated Per-Student) ──────────────
   const login = ({ identifier, password, rememberMe = true }) => {
     if (!identifier || !identifier.trim()) {
       return { success: false, message: 'Please enter your student ID or university email.' };
     }
+    if (!password) {
+      return { success: false, message: 'Please enter your account password.' };
+    }
+
     const cleanId = identifier.trim().toLowerCase();
 
-    // Look for matching user in database
+    // Look for matching user in user database
     const foundUser = users.find(
       u => u.email.toLowerCase() === cleanId || u.studentId.toLowerCase() === cleanId
     );
 
-    if (foundUser) {
-      if (foundUser.password && password && password !== foundUser.password && password !== 'password123') {
-        return { success: false, message: 'Incorrect password. (For demo accounts, password is: password123)' };
-      }
-
-      if (foundUser.profileType) {
-        loadDemoProfile(foundUser.profileType);
-      } else {
-        setStudent({
-          name: foundUser.name,
-          id: foundUser.studentId,
-          program: foundUser.program,
-          faculty: foundUser.faculty || 'Faculty of Computing',
-          currentSemesterNumber: foundUser.currentSemesterNumber || 1,
-          targetCGPA: foundUser.targetCGPA || 3.5,
-          degreeTotalCredits: foundUser.degreeTotalCredits || 130,
-        });
-      }
-
-      setCurrentUser(foundUser);
-      setIsAuthenticated(true);
-      if (rememberMe) {
-        localStorage.setItem('smart_cgpa_is_authenticated', 'true');
-      }
-      showToast(`Welcome back, ${foundUser.name}!`, 'success');
-      return { success: true };
+    if (!foundUser) {
+      return {
+        success: false,
+        message: 'No student account matches this ID or Email. Please create an account in the "Create Account" tab.',
+      };
     }
 
-    // Quick match fallback if typed student name
-    if (cleanId.includes('sarah')) return loginWithDemo('growth');
-    if (cleanId.includes('marcus')) return loginWithDemo('high_achiever');
-    if (cleanId.includes('liam')) return loginWithDemo('at_risk');
+    // STRICT Password Validation: Must match the account password
+    if (foundUser.password !== password) {
+      return {
+        success: false,
+        message: 'Incorrect password for this student account. Please verify your password.',
+      };
+    }
 
-    return {
-      success: false,
-      message: 'Student account not found. Please click "Create Account" or use Quick Demo Access.',
-    };
-  };
+    // Load isolated profile for this user
+    const userProfileKey = getUserProfileKey(foundUser.id);
+    const userCoursesKey = getUserCoursesKey(foundUser.id);
 
-  const loginWithDemo = (profileId) => {
-    let normalized = profileId;
-    if (profileId === 'sarah') normalized = 'growth';
-    if (profileId === 'marcus') normalized = 'high_achiever';
-    if (profileId === 'liam') normalized = 'at_risk';
+    let userProfile = null;
+    const savedProfile = localStorage.getItem(userProfileKey);
+    if (savedProfile) {
+      try { userProfile = JSON.parse(savedProfile); } catch {}
+    }
+    if (!userProfile) {
+      userProfile = {
+        name: foundUser.name,
+        id: foundUser.studentId,
+        program: foundUser.program,
+        faculty: foundUser.faculty || 'Faculty of Computing & IT',
+        currentSemesterNumber: foundUser.currentSemesterNumber || 1,
+        targetCGPA: foundUser.targetCGPA || 3.50,
+        degreeTotalCredits: foundUser.degreeTotalCredits || 130,
+      };
+      localStorage.setItem(userProfileKey, JSON.stringify(userProfile));
+    }
+    setStudent(userProfile);
 
-    const demoUser = users.find(u => u.profileType === normalized) || DEFAULT_USERS.find(u => u.profileType === normalized) || DEFAULT_USERS[0];
-    loadDemoProfile(normalized);
-    setCurrentUser(demoUser);
+    // Load isolated courses for this user
+    let userCourses = null;
+    const savedCourses = localStorage.getItem(userCoursesKey);
+    if (savedCourses) {
+      try { userCourses = JSON.parse(savedCourses); } catch {}
+    }
+    if (!userCourses) {
+      if (foundUser.profileType) {
+        const demo = DEMO_PROFILES.find(p => p.id === foundUser.profileType);
+        if (demo) userCourses = demo.semesters;
+      }
+      if (!userCourses) {
+        userCourses = [
+          {
+            id: `sem-${Date.now()}`,
+            name: 'Semester 1',
+            term: 'Current Term',
+            isCompleted: false,
+            subjects: [],
+          },
+        ];
+      }
+      localStorage.setItem(userCoursesKey, JSON.stringify(userCourses));
+    }
+
+    setSemesters(userCourses);
+    setActiveSemesterId(userCourses[userCourses.length - 1]?.id || 'sem-1');
+    setSimulatedGrades({});
+
+    setCurrentUser(foundUser);
     setIsAuthenticated(true);
-    localStorage.setItem('smart_cgpa_is_authenticated', 'true');
-    showToast(`Signed in as ${demoUser.name} (${demoUser.program})`, 'success');
-    return { success: true };
-  };
 
-  const loginAsGuest = () => {
-    const guestUser = {
-      id: 'user-guest',
-      name: 'Guest Explorer',
-      email: 'guest@student.advisor.local',
-      studentId: 'GUEST-2026',
-      program: 'B.S. Academic Sciences',
-      faculty: 'University Guest Access',
-      currentSemesterNumber: 4,
-      targetCGPA: 3.50,
-      degreeTotalCredits: 130,
-      isGuest: true,
-      initials: 'GE',
-      tagline: 'Guest Explorer Session',
-    };
-    resetToDefaultData();
-    setCurrentUser(guestUser);
-    setIsAuthenticated(true);
-    localStorage.setItem('smart_cgpa_is_authenticated', 'true');
-    showToast('Welcome, Guest Explorer! Enjoy exploring Smart CGPA Advisor.', 'info');
+    if (rememberMe) {
+      localStorage.setItem('smart_cgpa_is_authenticated', 'true');
+      localStorage.setItem('smart_cgpa_current_user', JSON.stringify(foundUser));
+    }
+
+    showToast(`Welcome back, ${foundUser.name}! Your private courses vault is open.`, 'success');
     return { success: true };
   };
 
@@ -432,7 +506,7 @@ export function AcademicProvider({ children }) {
       return { success: false, message: 'Please enter a valid university email.' };
     }
     if (!formData.password || formData.password.length < 4) {
-      return { success: false, message: 'Password must be at least 4 characters.' };
+      return { success: false, message: 'Password must be at least 4 characters long.' };
     }
 
     const cleanEmail = formData.email.trim().toLowerCase();
@@ -446,12 +520,12 @@ export function AcademicProvider({ children }) {
     const initials = formData.name.trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'ST';
 
     const newUser = {
-      id: `user-${Date.now()}`,
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: formData.name.trim(),
       email: cleanEmail,
       studentId: cleanId,
       program: formData.program?.trim() || 'B.S. Computer Science',
-      faculty: formData.faculty?.trim() || 'Faculty of Information Technology',
+      faculty: formData.faculty?.trim() || 'Faculty of Computing & IT',
       currentSemesterNumber: parseInt(formData.currentSemesterNumber) || 1,
       targetCGPA: parseFloat(formData.targetCGPA) || 3.50,
       degreeTotalCredits: parseInt(formData.degreeTotalCredits) || 130,
@@ -461,8 +535,12 @@ export function AcademicProvider({ children }) {
       isCustom: true,
     };
 
-    setUsers(prev => [...prev, newUser]);
+    // Save in user list
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    localStorage.setItem('smart_cgpa_users_db', JSON.stringify(updatedUsers));
 
+    // Save new student's private profile
     const newStudentProfile = {
       name: newUser.name,
       id: newUser.studentId,
@@ -472,11 +550,11 @@ export function AcademicProvider({ children }) {
       targetCGPA: newUser.targetCGPA,
       degreeTotalCredits: newUser.degreeTotalCredits,
     };
-
     setStudent(newStudentProfile);
+    localStorage.setItem(getUserProfileKey(newUser.id), JSON.stringify(newStudentProfile));
 
-    // Initialize with a clean 1st semester template
-    const initialStudentSemester = [
+    // Initialize clean private semester for this student
+    const newStudentSemesters = [
       {
         id: `sem-${Date.now()}`,
         name: 'Semester 1',
@@ -487,27 +565,49 @@ export function AcademicProvider({ children }) {
           { id: `sub-${Date.now()}-2`, code: 'MTH101', name: 'Calculus & Analytical Geometry', credits: 3, grade: 'B+' },
           { id: `sub-${Date.now()}-3`, code: 'ENG101', name: 'English Composition', credits: 3, grade: 'A' },
           { id: `sub-${Date.now()}-4`, code: 'PHY101', name: 'Applied Physics', credits: 3, grade: 'B' },
-          { id: `sub-${Date.now()}-5`, code: 'HUM101', name: 'Professional Ethics', credits: 2, grade: 'A-' },
         ],
       },
     ];
-    setSemesters(initialStudentSemester);
-    setActiveSemesterId(initialStudentSemester[0].id);
-    setSimulatedGrades({});
+    setSemesters(newStudentSemesters);
+    setActiveSemesterId(newStudentSemesters[0].id);
+    localStorage.setItem(getUserCoursesKey(newUser.id), JSON.stringify(newStudentSemesters));
 
+    setSimulatedGrades({});
     setCurrentUser(newUser);
     setIsAuthenticated(true);
     localStorage.setItem('smart_cgpa_is_authenticated', 'true');
-    showToast(`Welcome, ${newUser.name}! Your account has been created.`, 'success');
+    localStorage.setItem('smart_cgpa_current_user', JSON.stringify(newUser));
+
+    showToast(`Welcome, ${newUser.name}! Your private courses vault is created.`, 'success');
     return { success: true };
   };
 
   const logout = () => {
+    // If user was logged in, ensure their latest edits are safely persisted to their private key
+    if (currentUser && currentUser.id) {
+      if (Array.isArray(semesters)) {
+        localStorage.setItem(getUserCoursesKey(currentUser.id), JSON.stringify(semesters));
+      }
+      if (student && student.name) {
+        localStorage.setItem(getUserProfileKey(currentUser.id), JSON.stringify(student));
+      }
+    }
+
+    // Wipe in-memory active state so courses are never seen by anyone else
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setStudent(BLANK_STUDENT);
+    setSemesters([]);
+    setSimulatedGrades({});
+
     localStorage.removeItem('smart_cgpa_is_authenticated');
     localStorage.removeItem('smart_cgpa_current_user');
-    showToast('Signed out successfully. See you next semester!', 'info');
+
+    // Remove legacy shared keys
+    localStorage.removeItem('smart_cgpa_student');
+    localStorage.removeItem('smart_cgpa_semesters');
+
+    showToast('Signed out successfully. Your courses are locked and saved.', 'info');
   };
 
   return (
@@ -552,15 +652,12 @@ export function AcademicProvider({ children }) {
         setPriorConsolidatedCGPA,
         editingSubject,
         setEditingSubject,
-        loadDemoProfile,
-        resetToDefaultData,
+        resetCurrentUserCourses,
         // Auth State & Methods
         users,
         isAuthenticated,
         currentUser,
         login,
-        loginWithDemo,
-        loginAsGuest,
         register,
         logout,
       }}

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useAcademic } from '../context/AcademicContext';
-import { DEMO_PROFILES } from '../data/initialData';
 import {
   GraduationCap,
   Sun,
@@ -10,11 +9,11 @@ import {
   RotateCcw,
   UserCheck,
   ChevronDown,
-  Sparkles,
   User,
   Edit3,
   LogOut,
-  Shield,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -25,8 +24,7 @@ export default function Navbar() {
     setIsGradeScaleModalOpen,
     setIsPrintSummaryOpen,
     setIsProfileModalOpen,
-    resetToDefaultData,
-    loadDemoProfile,
+    resetCurrentUserCourses,
     currentUser,
     logout,
   } = useAcademic();
@@ -48,7 +46,7 @@ export default function Navbar() {
           <div className="brand-text">
             <div className="brand-title-wrap">
               <h1 className="brand-title">Smart CGPA Advisor</h1>
-              <span className="brand-badge">PRO ACADEMIC</span>
+              <span className="brand-badge">PORTAL ACTIVE</span>
             </div>
             <p className="brand-subtitle">
               Intelligent GPA Calculation • What-If Simulation • Academic Strategy
@@ -58,12 +56,12 @@ export default function Navbar() {
 
         {/* Student Profile Quick View & Actions */}
         <div className="header-actions">
-          {/* Student Profile Switcher & Name Editor */}
+          {/* Student Profile Pill & Private Session Dropdown */}
           <div className="profile-switcher-wrapper">
             <button
               className="btn btn-secondary profile-switcher-btn"
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              title="Click to manage profile, switch students, or sign out"
+              title="Click to view private student session or sign out"
             >
               <div className="nav-user-avatar-badge">{initials}</div>
               <div className="profile-btn-info">
@@ -86,7 +84,22 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                {/* Direct Enter Your Name Button */}
+                <div className="private-session-status-badge" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  fontSize: '0.6875rem',
+                  color: 'var(--color-emerald)',
+                  background: 'var(--color-emerald-subtle)',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: 'var(--radius-sm)',
+                  marginBottom: '0.5rem',
+                }}>
+                  <ShieldCheck size={13} />
+                  <span>Private Session: Courses locked to your account</span>
+                </div>
+
+                {/* Edit Student Profile Button */}
                 <div className="dropdown-custom-name-box">
                   <button
                     className="btn btn-primary btn-sm btn-block"
@@ -99,23 +112,24 @@ export default function Navbar() {
                   </button>
                 </div>
 
-                <div className="dropdown-header">
-                  <Sparkles size={14} className="text-accent" />
-                  <span>Switch Student Profile</span>
-                </div>
-                {DEMO_PROFILES.map((p) => (
-                  <button
-                    key={p.id}
-                    className="dropdown-item"
-                    onClick={() => {
-                      loadDemoProfile(p.id);
+                {/* Reset My Courses Option */}
+                <button
+                  className="dropdown-item"
+                  style={{ marginTop: '0.25rem' }}
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to reset your courses for this account?")) {
+                      resetCurrentUserCourses();
                       setProfileDropdownOpen(false);
-                    }}
-                  >
-                    <div className="item-title">{p.label}</div>
-                    <div className="item-desc">{p.description}</div>
-                  </button>
-                ))}
+                    }
+                  }}
+                >
+                  <div className="item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <RotateCcw size={14} /> Reset My Coursework
+                  </div>
+                  <div className="item-desc">
+                    Clear or reinitialize courses for your account
+                  </div>
+                </button>
 
                 {/* Sign Out Option */}
                 <div className="dropdown-divider-subtle" style={{ margin: '0.4rem 0', borderTop: '1px solid var(--border-subtle)' }} />
@@ -131,7 +145,7 @@ export default function Navbar() {
                     <LogOut size={14} /> Sign Out of Portal
                   </div>
                   <div className="item-desc" style={{ color: 'var(--text-dim)' }}>
-                    End session and return to Sign In page
+                    Lock courses and return to Sign In page
                   </div>
                 </button>
               </div>
@@ -142,7 +156,7 @@ export default function Navbar() {
           <button
             className="btn btn-icon-text btn-edit-name-nav"
             onClick={() => setIsProfileModalOpen(true)}
-            title="Enter / Edit Student Name"
+            title="Edit Student Profile & Target CGPA"
           >
             <Edit3 size={15} className="text-accent" />
             <span className="btn-label-desktop">Edit Profile</span>
@@ -166,15 +180,6 @@ export default function Navbar() {
           >
             <Printer size={16} />
             <span className="btn-label-desktop">Export Report</span>
-          </button>
-
-          {/* Reset Demo Data Button */}
-          <button
-            className="btn btn-icon-only"
-            onClick={resetToDefaultData}
-            title="Reset data to standard default"
-          >
-            <RotateCcw size={16} />
           </button>
 
           {/* Theme Toggle Button */}
