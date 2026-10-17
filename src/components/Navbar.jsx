@@ -13,6 +13,8 @@ import {
   Sparkles,
   User,
   Edit3,
+  LogOut,
+  Shield,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -25,9 +27,15 @@ export default function Navbar() {
     setIsProfileModalOpen,
     resetToDefaultData,
     loadDemoProfile,
+    currentUser,
+    logout,
   } = useAcademic();
 
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+
+  // Derive initials
+  const initials = currentUser?.initials || 
+    (student.name ? student.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'ST');
 
   return (
     <header className="app-header">
@@ -55,13 +63,13 @@ export default function Navbar() {
             <button
               className="btn btn-secondary profile-switcher-btn"
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              title="Click to switch profiles or enter custom name"
+              title="Click to manage profile, switch students, or sign out"
             >
-              <UserCheck size={16} className="text-primary" />
+              <div className="nav-user-avatar-badge">{initials}</div>
               <div className="profile-btn-info">
                 <span className="profile-student-name">{student.name}</span>
                 <span className="profile-student-meta">
-                  {student.program.split(' ')[0]} • Sem {student.currentSemesterNumber}
+                  {student.id} • Sem {student.currentSemesterNumber}
                 </span>
               </div>
               <ChevronDown size={14} className={`dropdown-arrow ${profileDropdownOpen ? 'rotated' : ''}`} />
@@ -69,6 +77,15 @@ export default function Navbar() {
 
             {profileDropdownOpen && (
               <div className="dropdown-menu profile-dropdown">
+                {/* Active Session Info Box */}
+                <div className="dropdown-user-header">
+                  <div className="dropdown-user-avatar">{initials}</div>
+                  <div className="dropdown-user-details">
+                    <span className="dropdown-user-name">{student.name}</span>
+                    <span className="dropdown-user-id">{student.id} • {student.program}</span>
+                  </div>
+                </div>
+
                 {/* Direct Enter Your Name Button */}
                 <div className="dropdown-custom-name-box">
                   <button
@@ -78,13 +95,13 @@ export default function Navbar() {
                       setProfileDropdownOpen(false);
                     }}
                   >
-                    <Edit3 size={14} /> Enter Your Name & Details
+                    <Edit3 size={14} /> Edit Profile & Target GPA
                   </button>
                 </div>
 
                 <div className="dropdown-header">
                   <Sparkles size={14} className="text-accent" />
-                  <span>Or Choose Demo Profile</span>
+                  <span>Switch Student Profile</span>
                 </div>
                 {DEMO_PROFILES.map((p) => (
                   <button
@@ -99,6 +116,24 @@ export default function Navbar() {
                     <div className="item-desc">{p.description}</div>
                   </button>
                 ))}
+
+                {/* Sign Out Option */}
+                <div className="dropdown-divider-subtle" style={{ margin: '0.4rem 0', borderTop: '1px solid var(--border-subtle)' }} />
+                <button
+                  className="dropdown-item text-rose"
+                  style={{ color: 'var(--color-rose)' }}
+                  onClick={() => {
+                    setProfileDropdownOpen(false);
+                    logout();
+                  }}
+                >
+                  <div className="item-title" style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <LogOut size={14} /> Sign Out of Portal
+                  </div>
+                  <div className="item-desc" style={{ color: 'var(--text-dim)' }}>
+                    End session and return to Sign In page
+                  </div>
+                </button>
               </div>
             )}
           </div>
@@ -110,7 +145,7 @@ export default function Navbar() {
             title="Enter / Edit Student Name"
           >
             <Edit3 size={15} className="text-accent" />
-            <span className="btn-label-desktop">Edit Name</span>
+            <span className="btn-label-desktop">Edit Profile</span>
           </button>
 
           {/* Grade Scale Reference Button */}
@@ -150,8 +185,19 @@ export default function Navbar() {
           >
             {theme === 'dark' ? <Sun size={18} className="text-warning" /> : <Moon size={18} />}
           </button>
+
+          {/* Explicit Sign Out Button */}
+          <button
+            className="btn btn-icon-text btn-signout-nav"
+            onClick={logout}
+            title="Sign Out of Academic Portal"
+          >
+            <LogOut size={15} />
+            <span className="btn-label-desktop">Sign Out</span>
+          </button>
         </div>
       </div>
     </header>
   );
 }
+

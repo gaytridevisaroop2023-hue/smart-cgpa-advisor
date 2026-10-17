@@ -15,11 +15,12 @@ import GradeScaleModal from './components/GradeScaleModal';
 import PrintSummaryModal from './components/PrintSummaryModal';
 import EditProfileModal from './components/EditProfileModal';
 import EditCgpaModal from './components/EditCgpaModal';
-import { CheckCircle2, AlertCircle, Info, Sparkles } from 'lucide-react';
+import SignInPage from './pages/SignInPage';
+import { CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import './App.css';
 
 function MainLayout() {
-  const { activeTab, toast } = useAcademic();
+  const { activeTab } = useAcademic();
 
   return (
     <div className="app-viewport">
@@ -62,8 +63,18 @@ function MainLayout() {
       <PrintSummaryModal />
       <EditProfileModal />
       <EditCgpaModal />
+    </div>
+  );
+}
 
-      {/* Toast Notification Container */}
+function AppContent() {
+  const { isAuthenticated, toast } = useAcademic();
+
+  return (
+    <div className="app-root-shell">
+      {!isAuthenticated ? <SignInPage /> : <MainLayout />}
+
+      {/* Global Toast Notification Container */}
       {toast && (
         <div className={`toast-notification toast-${toast.type}`}>
           <div className="toast-icon">
@@ -81,7 +92,8 @@ function MainLayout() {
 export default function App() {
   return (
     <AcademicProvider>
-      <MainLayout />
+      <AppContent />
     </AcademicProvider>
   );
 }
+

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { SAMPLE_STUDENT, INITIAL_SEMESTERS, DEMO_PROFILES } from '../data/initialData';
+import { SAMPLE_STUDENT, INITIAL_SEMESTERS, DEMO_PROFILES, DEFAULT_USERS } from '../data/initialData';
 import {
   calculateCumulativeStats,
   calculateWhatIfCGPA,
@@ -15,6 +15,29 @@ export function AcademicProvider({ children }) {
   // Theme State
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('smart_cgpa_theme') || 'dark';
+  });
+
+  // Auth State & User Accounts
+  const [users, setUsers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smart_cgpa_users_db');
+      return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    } catch {
+      return DEFAULT_USERS;
+    }
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('smart_cgpa_is_authenticated') === 'true';
+  });
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('smart_cgpa_current_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
   // Active Navigation Tab
@@ -51,6 +74,22 @@ export function AcademicProvider({ children }) {
   const [editingSubject, setEditingSubject] = useState(null); // { semesterId, subject } or null
 
   // Save changes to localStorage
+  useEffect(() => {
+    localStorage.setItem('smart_cgpa_users_db', JSON.stringify(users));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('smart_cgpa_is_authenticated', isAuthenticated ? 'true' : 'false');
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('smart_cgpa_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('smart_cgpa_current_user');
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     localStorage.setItem('smart_cgpa_student', JSON.stringify(student));
   }, [student]);
@@ -296,6 +335,181 @@ export function AcademicProvider({ children }) {
     showToast(`Prior CGPA set to ${gpa.toFixed(2)} (${credits} Credits)`, 'success');
   };
 
+  // ── Authentication Handlers ─────────────────────────────────────
+  const login = ({ identifier, password, rememberMe = true }) => {
+    if (!identifier || !identifier.trim()) {
+      return { success: false, message: 'Please enter your student ID or university email.' };
+    }
+    const cleanId = identifier.trim().toLowerCase();
+
+    // Look for matching user in database
+    const foundUser = users.find(
+      u => u.email.toLowerCase() === cleanId || u.studentId.toLowerCase() === cleanId
+    );
+
+    if (foundUser) {
+      if (foundUser.password && password && password !== foundUser.password && password !== 'password123') {
+        return { success: false, message: 'Incorrect password. (For demo accounts, password is: password123)' };
+      }
+
+      if (foundUser.profileType) {
+        loadDemoProfile(foundUser.profileType);
+      } else {
+        setStudent({
+          name: foundUser.name,
+          id: foundUser.studentId,
+          program: foundUser.program,
+          faculty: foundUser.faculty || 'Faculty of Computing',
+          currentSemesterNumber: foundUser.currentSemesterNumber || 1,
+          targetCGPA: foundUser.targetCGPA || 3.5,
+          degreeTotalCredits: foundUser.degreeTotalCredits || 130,
+        });
+      }
+
+      setCurrentUser(foundUser);
+      setIsAuthenticated(true);
+      if (rememberMe) {
+        localStorage.setItem('smart_cgpa_is_authenticated', 'true');
+      }
+      showToast(`Welcome back, ${foundUser.name}!`, 'success');
+      return { success: true };
+    }
+
+    // Quick match fallback if typed student name
+    if (cleanId.includes('sarah')) return loginWithDemo('growth');
+    if (cleanId.includes('marcus')) return loginWithDemo('high_achiever');
+    if (cleanId.includes('liam')) return loginWithDemo('at_risk');
+
+    return {
+      success: false,
+      message: 'Student account not found. Please click "Create Account" or use Quick Demo Access.',
+    };
+  };
+
+  const loginWithDemo = (profileId) => {
+    let normalized = profileId;
+    if (profileId === 'sarah') normalized = 'growth';
+    if (profileId === 'marcus') normalized = 'high_achiever';
+    if (profileId === 'liam') normalized = 'at_risk';
+
+    const demoUser = users.find(u => u.profileType === normalized) || DEFAULT_USERS.find(u => u.profileType === normalized) || DEFAULT_USERS[0];
+    loadDemoProfile(normalized);
+    setCurrentUser(demoUser);
+    setIsAuthenticated(true);
+    localStorage.setItem('smart_cgpa_is_authenticated', 'true');
+    showToast(`Signed in as ${demoUser.name} (${demoUser.program})`, 'success');
+    return { success: true };
+  };
+
+  const loginAsGuest = () => {
+    const guestUser = {
+      id: 'user-guest',
+      name: 'Guest Explorer',
+      email: 'guest@student.advisor.local',
+      studentId: 'GUEST-2026',
+      program: 'B.S. Academic Sciences',
+      faculty: 'University Guest Access',
+      currentSemesterNumber: 4,
+      targetCGPA: 3.50,
+      degreeTotalCredits: 130,
+      isGuest: true,
+      initials: 'GE',
+      tagline: 'Guest Explorer Session',
+    };
+    resetToDefaultData();
+    setCurrentUser(guestUser);
+    setIsAuthenticated(true);
+    localStorage.setItem('smart_cgpa_is_authenticated', 'true');
+    showToast('Welcome, Guest Explorer! Enjoy exploring Smart CGPA Advisor.', 'info');
+    return { success: true };
+  };
+
+  const register = (formData) => {
+    if (!formData.name || !formData.name.trim()) {
+      return { success: false, message: 'Please enter your full name.' };
+    }
+    if (!formData.email || !formData.email.trim()) {
+      return { success: false, message: 'Please enter a valid university email.' };
+    }
+    if (!formData.password || formData.password.length < 4) {
+      return { success: false, message: 'Password must be at least 4 characters.' };
+    }
+
+    const cleanEmail = formData.email.trim().toLowerCase();
+    const cleanId = (formData.studentId || `STU-${Date.now().toString().slice(-4)}`).trim().toUpperCase();
+
+    // Check duplicate
+    if (users.some(u => u.email.toLowerCase() === cleanEmail || u.studentId.toUpperCase() === cleanId)) {
+      return { success: false, message: 'An account with this Email or Student ID already exists. Please Sign In.' };
+    }
+
+    const initials = formData.name.trim().split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'ST';
+
+    const newUser = {
+      id: `user-${Date.now()}`,
+      name: formData.name.trim(),
+      email: cleanEmail,
+      studentId: cleanId,
+      program: formData.program?.trim() || 'B.S. Computer Science',
+      faculty: formData.faculty?.trim() || 'Faculty of Information Technology',
+      currentSemesterNumber: parseInt(formData.currentSemesterNumber) || 1,
+      targetCGPA: parseFloat(formData.targetCGPA) || 3.50,
+      degreeTotalCredits: parseInt(formData.degreeTotalCredits) || 130,
+      password: formData.password,
+      initials: initials,
+      tagline: `${formData.program?.trim() || 'Degree Candidate'}`,
+      isCustom: true,
+    };
+
+    setUsers(prev => [...prev, newUser]);
+
+    const newStudentProfile = {
+      name: newUser.name,
+      id: newUser.studentId,
+      program: newUser.program,
+      faculty: newUser.faculty,
+      currentSemesterNumber: newUser.currentSemesterNumber,
+      targetCGPA: newUser.targetCGPA,
+      degreeTotalCredits: newUser.degreeTotalCredits,
+    };
+
+    setStudent(newStudentProfile);
+
+    // Initialize with a clean 1st semester template
+    const initialStudentSemester = [
+      {
+        id: `sem-${Date.now()}`,
+        name: 'Semester 1',
+        term: 'Fall 2026',
+        isCompleted: false,
+        subjects: [
+          { id: `sub-${Date.now()}-1`, code: 'CS101', name: 'Programming Fundamentals', credits: 4, grade: 'A-' },
+          { id: `sub-${Date.now()}-2`, code: 'MTH101', name: 'Calculus & Analytical Geometry', credits: 3, grade: 'B+' },
+          { id: `sub-${Date.now()}-3`, code: 'ENG101', name: 'English Composition', credits: 3, grade: 'A' },
+          { id: `sub-${Date.now()}-4`, code: 'PHY101', name: 'Applied Physics', credits: 3, grade: 'B' },
+          { id: `sub-${Date.now()}-5`, code: 'HUM101', name: 'Professional Ethics', credits: 2, grade: 'A-' },
+        ],
+      },
+    ];
+    setSemesters(initialStudentSemester);
+    setActiveSemesterId(initialStudentSemester[0].id);
+    setSimulatedGrades({});
+
+    setCurrentUser(newUser);
+    setIsAuthenticated(true);
+    localStorage.setItem('smart_cgpa_is_authenticated', 'true');
+    showToast(`Welcome, ${newUser.name}! Your account has been created.`, 'success');
+    return { success: true };
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    localStorage.removeItem('smart_cgpa_is_authenticated');
+    localStorage.removeItem('smart_cgpa_current_user');
+    showToast('Signed out successfully. See you next semester!', 'info');
+  };
+
   return (
     <AcademicContext.Provider
       value={{
@@ -340,6 +554,15 @@ export function AcademicProvider({ children }) {
         setEditingSubject,
         loadDemoProfile,
         resetToDefaultData,
+        // Auth State & Methods
+        users,
+        isAuthenticated,
+        currentUser,
+        login,
+        loginWithDemo,
+        loginAsGuest,
+        register,
+        logout,
       }}
     >
       {children}
